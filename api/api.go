@@ -41,6 +41,7 @@ func (c ChargeStatus) String() string {
 
 // Meter is able to provide current power in W
 type Meter interface {
+	Connect() (Meter, error)
 	CurrentPower() (float64, error)
 }
 
