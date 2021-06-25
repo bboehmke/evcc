@@ -15,10 +15,13 @@ import (
 
 // SMA supporting SMA Home Manager 2.0, SMA Energy Meter 30 and SMA inverter
 type SMA struct {
+	URI, Interface string
+	Password       string
+	Serial         uint32
+	Power, Energy  string
+	Scale          float64 // power only
+
 	log    *util.Logger
-	uri    string
-	iface  string
-	scale  float64
 	device *sma.Device
 }
 
@@ -30,52 +33,36 @@ func init() {
 
 // NewSMAFromConfig creates a SMA Meter from generic config
 func NewSMAFromConfig(other map[string]interface{}) (api.Meter, error) {
-	cc := struct {
-		URI, Password, Interface string
-		Serial                   uint32
-		Power, Energy            string
-		Scale                    float64 // power only
-	}{
+	sm := &SMA{
+		log:      util.NewLogger("sma"),
 		Password: "0000",
 		Scale:    1,
 	}
 
-	if err := util.DecodeOther(other, &cc); err != nil {
+	if err := util.DecodeOther(other, &sm); err != nil {
 		return nil, err
 	}
 
-	if cc.Power != "" || cc.Energy != "" {
+	if sm.Power != "" || sm.Energy != "" {
 		util.NewLogger("sma").WARN.Println("energy and power setting are deprecated and will be removed in a future release")
 	}
 
-	return NewSMA(cc.URI, cc.Password, cc.Interface, cc.Serial, cc.Scale)
-}
-
-// NewSMA creates a SMA Meter
-func NewSMA(uri, password, iface string, serial uint32, scale float64) (api.Meter, error) {
-	sm := &SMA{
-		log:   util.NewLogger("sma"),
-		uri:   uri,
-		iface: iface,
-		scale: scale,
-	}
-
-	discoverer, err := sma.GetDiscoverer(iface)
+	discoverer, err := sma.GetDiscoverer(sm.Interface)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get discoverer failed: %w", err)
 	}
 
 	switch {
-	case uri != "":
-		sm.device, err = discoverer.DeviceByIP(uri, password)
+	case sm.URI != "":
+		sm.device, err = discoverer.DeviceByIP(sm.URI, sm.Password)
 		if err != nil {
 			return nil, err
 		}
 
-	case serial > 0:
-		sm.device = discoverer.DeviceBySerial(serial, password)
+	case sm.Serial > 0:
+		sm.device = discoverer.DeviceBySerial(sm.Serial, sm.Password)
 		if sm.device == nil {
-			return nil, fmt.Errorf("device not found: %d", serial)
+			return nil, fmt.Errorf("device not found: %d", sm.Serial)
 		}
 
 	default:
@@ -101,7 +88,7 @@ func NewSMA(uri, password, iface string, serial uint32, scale float64) (api.Mete
 // CurrentPower implements the api.Meter interface
 func (sm *SMA) CurrentPower() (float64, error) {
 	values, err := sm.device.GetValues()
-	return sm.scale * (sma.AsFloat(values[sunny.ActivePowerPlus]) - sma.AsFloat(values[sunny.ActivePowerMinus])), err
+	return sm.Scale * (sma.AsFloat(values[sunny.ActivePowerPlus]) - sma.AsFloat(values[sunny.ActivePowerMinus])), err
 }
 
 // TotalEnergy implements the api.MeterEnergy interface
