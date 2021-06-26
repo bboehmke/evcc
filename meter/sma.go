@@ -13,8 +13,8 @@ import (
 	"gitlab.com/bboehmke/sunny"
 )
 
-// SMA supporting SMA Home Manager 2.0, SMA Energy Meter 30 and SMA inverter
-type SMA struct {
+// smaMeter supporting SMA Home Manager 2.0, SMA Energy Meter 30 and SMA inverter
+type smaMeter struct {
 	URI, Interface string
 	Password       string
 	Serial         uint32
@@ -29,11 +29,11 @@ func init() {
 	registry.Add("sma", NewSMAFromConfig)
 }
 
-//go:generate go run ../cmd/tools/decorate.go -f decorateSMA -r api.Meter -b *SMA -t "api.Battery,SoC,func() (float64, error)"
+//go:generate go run ../cmd/tools/decorate.go -f decorateSMA -r api.Meter -b *smaMeter -t "api.Battery,SoC,func() (float64, error)"
 
 // NewSMAFromConfig creates a SMA Meter from generic config
 func NewSMAFromConfig(other map[string]interface{}) (api.Meter, error) {
-	sm := &SMA{
+	sm := &smaMeter{
 		log:      util.NewLogger("sma"),
 		Password: "0000",
 		Scale:    1,
@@ -86,19 +86,19 @@ func NewSMAFromConfig(other map[string]interface{}) (api.Meter, error) {
 }
 
 // CurrentPower implements the api.Meter interface
-func (sm *SMA) CurrentPower() (float64, error) {
+func (sm *smaMeter) CurrentPower() (float64, error) {
 	values, err := sm.device.GetValues()
 	return sm.Scale * (sma.AsFloat(values[sunny.ActivePowerPlus]) - sma.AsFloat(values[sunny.ActivePowerMinus])), err
 }
 
 // TotalEnergy implements the api.MeterEnergy interface
-func (sm *SMA) TotalEnergy() (float64, error) {
+func (sm *smaMeter) TotalEnergy() (float64, error) {
 	values, err := sm.device.GetValues()
 	return sma.AsFloat(values[sunny.ActiveEnergyPlus]) / 3600000, err
 }
 
 // Currents implements the api.MeterCurrent interface
-func (sm *SMA) Currents() (float64, float64, float64, error) {
+func (sm *smaMeter) Currents() (float64, float64, float64, error) {
 	values, err := sm.device.GetValues()
 
 	measurements := []sunny.ValueID{sunny.CurrentL1, sunny.CurrentL2, sunny.CurrentL3}
@@ -111,13 +111,13 @@ func (sm *SMA) Currents() (float64, float64, float64, error) {
 }
 
 // soc implements the api.Battery interface
-func (sm *SMA) soc() (float64, error) {
+func (sm *smaMeter) soc() (float64, error) {
 	values, err := sm.device.GetValues()
 	return sma.AsFloat(values[sunny.BatteryCharge]), err
 }
 
 // Diagnose implements the api.Diagnosis interface
-func (sm *SMA) Diagnose() {
+func (sm *smaMeter) Diagnose() {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 
 	fmt.Fprintf(w, "  IP:\t%s\n", sm.device.Address())
